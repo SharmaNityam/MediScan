@@ -49,7 +49,7 @@ Respond only with valid JSON without any additional commentary or explanation.`;
     }
     return parsedResponse;
   } catch (error) {
-    console.error("🔥 AI Processing Error:", error);
+    console.error("AI Processing Error:", error);
     throw new functions.https.HttpsError('internal', 'AI processing failed', {
       message: error,
       stack: error,
@@ -59,7 +59,7 @@ Respond only with valid JSON without any additional commentary or explanation.`;
 
 exports.analyzeTextReportHttp = functions.https.onRequest(async (req, res) => {
   try {
-    console.log("📜 Received Text:", req.body.text);
+    console.log("Received Text:", req.body.text);
 
     if (!req.body.text) {
       res.status(400).json({ error: 'No text provided' });
