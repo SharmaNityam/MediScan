@@ -64,7 +64,7 @@ class _HomePageState extends State<HomePage> {
     try {
       final response = await http.post(
         Uri.parse(
-            'https://us-central1-medical-21ff2.cloudfunctions.net/analyzeTextReportHttp'),
+            'ENTER_LINK_HERE'),
         body: jsonEncode({'text': text}),
         headers: {'Content-Type': 'application/json'},
       );
