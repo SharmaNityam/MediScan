@@ -5,6 +5,8 @@ import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 
 class HomePage extends StatefulWidget {
+  const HomePage({Key? key}) : super(key: key);
+
   @override
   _HomePageState createState() => _HomePageState();
 }
@@ -17,7 +19,6 @@ class _HomePageState extends State<HomePage> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final TextEditingController _controller = TextEditingController();
 
-  // Upload Text to Firestore and Analyze
   Future<void> uploadText() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -27,30 +28,26 @@ class _HomePageState extends State<HomePage> {
     });
 
     try {
-      // Ensure user is authenticated before uploading text
       if (FirebaseAuth.instance.currentUser == null) {
         await FirebaseAuth.instance.signInAnonymously();
       }
 
-      // Add text to Firestore
       DocumentReference docRef = await _firestore.collection('texts').add({
         'text': _textInput,
         'timestamp': FieldValue.serverTimestamp(),
       });
 
-      // Start listening for analysis results
       listenForAnalysisResults(docRef.id);
-
-      // Call HTTP endpoint for text analysis
       await analyzeText(docRef.id, _textInput);
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Text uploaded and analysis started!')),
+        const SnackBar(content: Text('Text uploaded and analysis started!')),
       );
     } catch (e) {
       print("Error uploading text: $e");
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error uploading text. Please try again.')),
+        const SnackBar(
+            content: Text('Error uploading text. Please try again.')),
       );
     } finally {
       setState(() {
@@ -59,7 +56,6 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  // Analyze Text via Firebase Genkit
   Future<void> analyzeText(String docId, String text) async {
     try {
       final response = await http.post(
@@ -95,12 +91,12 @@ class _HomePageState extends State<HomePage> {
     } catch (e) {
       print("Error analyzing text: $e");
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error analyzing text. Please try again.')),
+        const SnackBar(
+            content: Text('Error analyzing text. Please try again.')),
       );
     }
   }
 
-  // Listen for Firestore updates and display analysis results in real time
   void listenForAnalysisResults(String docId) {
     _firestore.collection('texts').doc(docId).snapshots().listen((snapshot) {
       if (snapshot.exists && snapshot.data() != null) {
@@ -121,102 +117,178 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
-  Widget _buildTextInput() {
-    return TextFormField(
-      controller: _controller,
-      maxLines: 5,
-      decoration: InputDecoration(
-        labelText: "Enter Medical Report Text",
-        hintText: "Type or paste the report here...",
-        border: OutlineInputBorder(),
-        contentPadding: EdgeInsets.symmetric(vertical: 12.0, horizontal: 12.0),
-      ),
-      validator: (value) {
-        if (value == null || value.trim().isEmpty) {
-          return "Please enter the report text.";
-        }
-        return null;
-      },
-      onChanged: (value) {
-        _textInput = value;
-      },
-    );
-  }
-
-  Widget _buildAnalysisDisplay() {
-    return _latestAnalysis != null
-        ? Container(
-            padding: EdgeInsets.all(16.0),
-            decoration: BoxDecoration(
-              color: Colors.grey[100],
-              borderRadius: BorderRadius.circular(8.0),
-              border: Border.all(color: Colors.grey[300]!),
-            ),
-            child: SingleChildScrollView(
-              child: Text(
-                _latestAnalysis!,
-                style: TextStyle(fontSize: 16, fontFamily: 'Courier'),
-              ),
-            ),
-          )
-        : Center(
-            child: Text(
-              "Waiting for analysis result...",
-              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-            ),
-          );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF5F5F5),
       appBar: AppBar(
-        title: Text("Medical Report Analyzer"),
-        centerTitle: true,
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+        title: Text(
+          'MediScan',
+          style: TextStyle(
+            color: Colors.black87,
+            fontWeight: FontWeight.bold,
+            fontSize: 22,
+          ),
+        ),
+        centerTitle: false,
       ),
-      body: Padding(
-        padding: EdgeInsets.all(16.0),
-        child: SingleChildScrollView(
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Form(
-                key: _formKey,
-                child: _buildTextInput(),
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.grey.withOpacity(0.2),
+                      spreadRadius: 2,
+                      blurRadius: 6,
+                      offset: Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Upload Medical Report',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      SizedBox(height: 16),
+                      Form(
+                        key: _formKey,
+                        child: TextFormField(
+                          controller: _controller,
+                          maxLines: 5,
+                          decoration: InputDecoration(
+                            hintText: 'Enter medical report text...',
+                            hintStyle: TextStyle(color: Colors.grey),
+                            fillColor: Colors.grey[100],
+                            filled: true,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return "Please enter the report text.";
+                            }
+                            return null;
+                          },
+                          onChanged: (value) {
+                            _textInput = value;
+                          },
+                        ),
+                      ),
+                      SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: _isLoading ? null : uploadText,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue[600],
+                          foregroundColor: Colors.white,
+                          minimumSize: Size(double.infinity, 50),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: _isLoading
+                            ? SizedBox(
+                                height: 24,
+                                width: 24,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 3,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.white),
+                                ),
+                              )
+                            : Text(
+                                'Analyze Report',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
               SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : uploadText,
-                  style: ElevatedButton.styleFrom(
-                    padding: EdgeInsets.symmetric(vertical: 16.0),
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.grey.withOpacity(0.2),
+                        spreadRadius: 2,
+                        blurRadius: 6,
+                        offset: Offset(0, 3),
+                      ),
+                    ],
                   ),
-                  child: _isLoading
-                      ? CircularProgressIndicator(
-                          valueColor:
-                              AlwaysStoppedAnimation<Color>(Colors.white),
-                        )
-                      : Text(
-                          "Upload & Analyze Text",
-                          style: TextStyle(fontSize: 16),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Analysis Result',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
                         ),
-                ),
-              ),
-              SizedBox(height: 30),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  "Analysis Result:",
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
+                        SizedBox(height: 16),
+                        Expanded(
+                          child: _latestAnalysis != null
+                              ? Container(
+                                  width: double.infinity,
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey[100],
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  padding: EdgeInsets.all(12),
+                                  child: SingleChildScrollView(
+                                    child: Text(
+                                      _latestAnalysis!,
+                                      style: TextStyle(
+                                        fontFamily: 'monospace',
+                                        fontSize: 14,
+                                        color: Colors.black87,
+                                      ),
+                                    ),
+                                  ),
+                                )
+                              : Center(
+                                  child: Text(
+                                    'Waiting for analysis...',
+                                    style: TextStyle(
+                                      color: Colors.grey,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              SizedBox(height: 10),
-              Container(
-                height: 300,
-                child: _buildAnalysisDisplay(),
               ),
             ],
           ),
