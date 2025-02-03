@@ -50,19 +50,19 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyCf4KSPA8OzR2nsvS8w2g7l2i_8NVNCy0w',
-    appId: '1:1018881609923:android:143e181c2dcebf0836d276',
-    messagingSenderId: '1018881609923',
-    projectId: 'medical-21ff2',
-    storageBucket: 'medical-21ff2.firebasestorage.app',
+    apiKey: '',
+    appId: '',
+    messagingSenderId: '',
+    projectId: '',
+    storageBucket: '',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyDNZTyW_63Dc7MRkCqAZ6ZmMute5NcSa-Y',
-    appId: '1:1018881609923:ios:bde394b246e6fb9e36d276',
-    messagingSenderId: '1018881609923',
-    projectId: 'medical-21ff2',
-    storageBucket: 'medical-21ff2.firebasestorage.app',
-    iosBundleId: 'com.example.medicalAgent',
+    apiKey: '',
+    appId: '',
+    messagingSenderId: '',
+    projectId: '',
+    storageBucket: '',
+    iosBundleId: '',
   );
 }
