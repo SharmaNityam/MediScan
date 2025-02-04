@@ -1,8 +1,11 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:image_picker/image_picker.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({Key? key}) : super(key: key);
@@ -18,6 +21,7 @@ class _HomePageState extends State<HomePage> {
   String? _latestAnalysis;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final TextEditingController _controller = TextEditingController();
+  File? _imageFile;
 
   Future<void> uploadText() async {
     if (!_formKey.currentState!.validate()) return;
@@ -37,7 +41,8 @@ class _HomePageState extends State<HomePage> {
         'timestamp': FieldValue.serverTimestamp(),
       });
 
-      listenForAnalysisResults(docRef.id);
+      listenForAnalysisResults(docRef.id,
+          isImage: false); 
       await analyzeText(docRef.id, _textInput);
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -56,11 +61,56 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> uploadImage() async {
+    if (_imageFile == null) return;
+
+    setState(() {
+      _isLoading = true;
+      _latestAnalysis = null;
+    });
+
+    try {
+      if (FirebaseAuth.instance.currentUser == null) {
+        await FirebaseAuth.instance.signInAnonymously();
+      }
+
+      String fileName = DateTime.now().millisecondsSinceEpoch.toString();
+      Reference storageReference =
+          FirebaseStorage.instance.ref().child('images/$fileName.jpg');
+      await storageReference.putFile(_imageFile!);
+
+      String gsLink =
+          'gs://${storageReference.bucket}/${storageReference.fullPath}';
+
+      DocumentReference docRef = await _firestore.collection('images').add({
+        'imageUrl': gsLink, 
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+
+      listenForAnalysisResults(docRef.id, isImage: true);
+      await analyzeImage(docRef.id, gsLink);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Image uploaded and analysis started!')),
+      );
+    } catch (e) {
+      print("Error uploading image: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Error uploading image. Please try again.')),
+      );
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
   Future<void> analyzeText(String docId, String text) async {
     try {
       final response = await http.post(
         Uri.parse(
-            'ENTER_LINK_HERE'),
+            ''),//enter the firebase function link here
         body: jsonEncode({'text': text}),
         headers: {'Content-Type': 'application/json'},
       );
@@ -97,8 +147,52 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  void listenForAnalysisResults(String docId) {
-    _firestore.collection('texts').doc(docId).snapshots().listen((snapshot) {
+  Future<void> analyzeImage(String docId, String imageUrl) async {
+    try {
+      final response = await http.post(
+        Uri.parse(
+            ''),//enter your firebase function link here
+        body: jsonEncode({'imageUrl': imageUrl}),
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (response.statusCode == 200) {
+        try {
+          Map<String, dynamic> analysisData = jsonDecode(response.body);
+          await _firestore.collection('images').doc(docId).update({
+            'analysis': analysisData,
+          });
+        } catch (e) {
+          print("Error parsing image analysis response: $e");
+          await _firestore.collection('images').doc(docId).update({
+            'analysis': {
+              'error': 'Failed to parse analysis',
+              'rawResponse': response.body,
+            },
+          });
+        }
+      } else {
+        print("HTTP Error: ${response.statusCode}, Body: ${response.body}");
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text(
+                  'Server error: ${response.statusCode}. Please try again.')),
+        );
+      }
+    } catch (e) {
+      print("Error analyzing image: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Error analyzing image. Please try again.')),
+      );
+    }
+  }
+
+  void listenForAnalysisResults(String docId, {bool isImage = false}) {
+    final collection = isImage
+        ? _firestore.collection('images')
+        : _firestore.collection('texts');
+    collection.doc(docId).snapshots().listen((snapshot) {
       if (snapshot.exists && snapshot.data() != null) {
         final data = snapshot.data();
         if (data!.containsKey('analysis')) {
@@ -107,6 +201,19 @@ class _HomePageState extends State<HomePage> {
                 const JsonEncoder.withIndent('  ').convert(data['analysis']);
           });
         }
+      }
+    });
+  }
+
+  Future<void> _pickImage() async {
+    final pickedFile =
+        await ImagePicker().pickImage(source: ImageSource.gallery);
+
+    setState(() {
+      if (pickedFile != null) {
+        _imageFile = File(pickedFile.path);
+      } else {
+        print('No image selected.');
       }
     });
   }
@@ -173,7 +280,7 @@ class _HomePageState extends State<HomePage> {
                           controller: _controller,
                           maxLines: 5,
                           decoration: InputDecoration(
-                            hintText: 'Enter medical report text...',
+                            hintText: 'Enter medical report text',
                             hintStyle: TextStyle(color: Colors.grey),
                             fillColor: Colors.grey[100],
                             filled: true,
@@ -216,6 +323,63 @@ class _HomePageState extends State<HomePage> {
                               )
                             : Text(
                                 'Analyze Report',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                      ),
+                      SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: _isLoading ? null : _pickImage,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue[600],
+                          foregroundColor: Colors.white,
+                          minimumSize: Size(double.infinity, 50),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Text(
+                          'Upload Image',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: 16),
+                      _imageFile != null
+                          ? Image.file(
+                              _imageFile!,
+                              height: 100,
+                              width: 100,
+                              fit: BoxFit.cover,
+                            )
+                          : Container(),
+                      SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: _isLoading ? null : uploadImage,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue[600],
+                          foregroundColor: Colors.white,
+                          minimumSize: Size(double.infinity, 50),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: _isLoading
+                            ? SizedBox(
+                                height: 24,
+                                width: 24,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 3,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.white),
+                                ),
+                              )
+                            : Text(
+                                'Analyze Image',
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
@@ -277,7 +441,7 @@ class _HomePageState extends State<HomePage> {
                                 )
                               : Center(
                                   child: Text(
-                                    'Waiting for analysis...',
+                                    'Waiting for analysis',
                                     style: TextStyle(
                                       color: Colors.grey,
                                       fontSize: 16,
