@@ -1,7 +1,7 @@
 import * as functions from 'firebase-functions/v1';
 import * as admin from 'firebase-admin';
 import { genkit } from 'genkit';
-import { gemini15Flash, googleAI } from '@genkit-ai/googleai';
+import { gemini20FlashExp, googleAI } from '@genkit-ai/googleai';
 import { enableFirebaseTelemetry } from '@genkit-ai/firebase';
 
 enableFirebaseTelemetry();
@@ -16,7 +16,7 @@ if (!GOOGLE_API_KEY) {
 
 const ai = genkit({
   plugins: [googleAI({ apiKey: GOOGLE_API_KEY })],
-  model: gemini15Flash,
+  model: gemini20FlashExp,
 });
 
 const analyzeMedicalReport = ai.defineFlow('analyzeMedicalReport', async (input) => {
@@ -25,8 +25,13 @@ const analyzeMedicalReport = ai.defineFlow('analyzeMedicalReport', async (input)
       throw new Error("No valid input provided");
     }
 
-    const prompt = `Analyze this medical report text: ${input.text}. Extract patient details, report content, and doctor details in JSON format.
-Respond only with valid JSON without any additional commentary or explanation.`;
+    const prompt = `Analyze this medical report text: ${input.text}. Extract the following details in JSON format:
+- patient_details: { name, age, gender }
+- report_content: { date, chief_complaint, diagnosis, past_medical_history, vital_signs: { blood_pressure, heart_rate }, tests: string[], treatment_plan: { medications: string[], lifestyle_modifications: boolean }, follow_up: string }
+- doctor_details: { name, age }
+- model_insights: { summary: string, recommendations: string[], questions_to_consider: string[] }
+
+Respond only with valid JSON. Do not include any additional commentary or explanation. If any field is missing or unknown, set its value to null.`;
 
     const { text } = await ai.generate(prompt);
 
@@ -47,7 +52,45 @@ Respond only with valid JSON without any additional commentary or explanation.`;
         throw new Error("No JSON block found in the AI response.");
       }
     }
+
+    if (!parsedResponse.patient_details || !parsedResponse.report_content || !parsedResponse.doctor_details) {
+      throw new Error("Invalid JSON structure in AI response.");
+    }
+
     return parsedResponse;
+  } catch (error) {
+    console.error("AI Processing Error:", error);
+    throw new functions.https.HttpsError('internal', 'AI processing failed', {
+      message: error,
+      stack: error,
+    });
+  }
+});
+
+const askFollowUpQuestion = ai.defineFlow('askFollowUpQuestion', async (input) => {
+  try {
+    if (!input.question || !input.context) {
+      throw new Error("No valid input provided");
+    }
+
+    let context = JSON.parse(input.context);
+
+    let relevantContext = '';
+    if (input.question.toLowerCase().includes('diagnosis')) {
+      relevantContext = context.report_content.diagnosis;
+    } else if (input.question.toLowerCase().includes('medications')) {
+      relevantContext = context.report_content.treatment_plan.medications.join(', ');
+    } else if (input.question.toLowerCase().includes('summary')) {
+      relevantContext = context.model_insights.summary;
+    } else {
+      relevantContext = context.model_insights.summary;
+    }
+
+    const prompt = `Context: ${relevantContext}\n\nQuestion: ${input.question}\n\nProvide a detailed answer based on the context.`;
+
+    const { text } = await ai.generate(prompt);
+
+    return { answer: text };
   } catch (error) {
     console.error("AI Processing Error:", error);
     throw new functions.https.HttpsError('internal', 'AI processing failed', {
@@ -76,20 +119,22 @@ exports.analyzeTextReportHttp = functions.https.onRequest(async (req, res) => {
   }
 });
 
-exports.analyzeTextReport = functions.firestore
-  .document('texts/{docId}')
-  .onCreate(async (snap, context) => {
-    try {
-      const data = snap.data();
-      if (!data.text) return;
+exports.askFollowUpQuestionHttp = functions.https.onRequest(async (req, res) => {
+  try {
+    console.log("Received Question:", req.body.question);
+    console.log("Received Context:", req.body.context);
 
-      console.log(" Firestore Trigger for Text:", data.text);
-      const analysis = await analyzeMedicalReport({ text: data.text });
-
-      await snap.ref.update({ analysis });
-
-      console.log("Firestore Text Analysis Saved.");
-    } catch (error) {
-      console.error(" Error in Firestore Text Trigger:", error);
+    if (!req.body.question || !req.body.context) {
+      res.status(400).json({ error: 'No question or context provided' });
+      return;
     }
-  });
+
+    const response = await askFollowUpQuestion({ question: req.body.question, context: req.body.context });
+
+    console.log("Follow-up Question Success:", response);
+    res.json(response);
+  } catch (error) {
+    console.error("Error in askFollowUpQuestionHttp:", error);
+    res.status(500).json({ error: "Internal Server Error", details: error });
+  }
+});
