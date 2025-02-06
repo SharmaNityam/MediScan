@@ -95,59 +95,43 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> uploadImage() async {
-    if (_imageFile == null) return;
+  if (_imageFile == null) return;
 
-    setState(() {
-      _isLoading = true;
-      _latestAnalysis = null;
-      _followUpResponse = null;
-    });
+  setState(() {
+    _isLoading = true;
+    _latestAnalysis = null;
+    _followUpResponse = null;
+  });
 
-    try {
-      if (FirebaseAuth.instance.currentUser == null) {
-        await FirebaseAuth.instance.signInAnonymously();
-      }
+  try {
+    final ImageAnalysisService analysisService = ImageAnalysisService();
+    final analysisResult = await analysisService.analyzeImage(_imageFile!);
 
-      String fileName = DateTime.now().millisecondsSinceEpoch.toString();
-      Reference storageReference =
-          FirebaseStorage.instance.ref().child('images/$fileName.jpg');
-      await storageReference.putFile(_imageFile!);
-
-      String gsLink =
-          'gs://${storageReference.bucket}/${storageReference.fullPath}';
-
-      DocumentReference docRef = await _firestore.collection('images').add({
-        'imageUrl': gsLink,
-        'timestamp': FieldValue.serverTimestamp(),
-      });
-
-      final analysisResult = await _imageAnalysisService.analyzeImage(gsLink);
-
-      await _firestore.collection('images').doc(docRef.id).update({
-        'analysis': analysisResult,
-      });
-
+    if (analysisResult['isValidReport']) {
       setState(() {
-        _latestAnalysis =
-            const JsonEncoder.withIndent('  ').convert(analysisResult);
+        _latestAnalysis = const JsonEncoder.withIndent('  ').convert(analysisResult);
         _contextForFollowUp = jsonEncode(analysisResult);
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Image uploaded and analysis completed!')),
+        const SnackBar(content: Text('Image analyzed successfully!')),
       );
-    } catch (e) {
-      print("Error uploading image: $e");
+    } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Error uploading image. Please try again.')),
+        SnackBar(content: Text(analysisResult['error'] ?? 'Invalid medical report')),
       );
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
     }
+  } catch (e) {
+    print("Error analyzing image: $e");
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Error analyzing image. Please try again.')),
+    );
+  } finally {
+    setState(() {
+      _isLoading = false;
+    });
   }
+}
 
   Future<void> askFollowUpQuestion() async {
     if (_followUpController.text.isEmpty || _contextForFollowUp == null) return;
