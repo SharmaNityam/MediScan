@@ -9,7 +9,7 @@ class ImageAnalysisService {
   final FirebaseStorage _storage = FirebaseStorage.instance;
 
   final String apiKey =
-      Platform.environment[''] ?? 'AIzaSyCwIeG4dNtzoGxg79mqApuxRp8B02Y_l-M';
+      Platform.environment[''] ?? 'ENTER_API_KEY';
   final String apiUrl =
       'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
