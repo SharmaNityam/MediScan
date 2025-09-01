@@ -41,3 +41,5 @@ AI also spotted patterns I was missing. For instance, it suggested breaking down
 When I ran into a type mismatch bug in my `fromJson` constructor, the app kept crashing. I copied both the Dart code and the sample JSON into ChatGPT and asked what was wrong.  
 
 It immediately pointed out that one field expected a `List<String>` but was sometimes `null` in the JSON. The suggestion was simple: add a null check with a default value (`?? []`). That fixed the crash instantly and saved me from wasting more time manually
+
+## Project Overview video- https://youtu.be/K4jX4xdmF5c
